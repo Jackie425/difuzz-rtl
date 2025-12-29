@@ -213,7 +213,9 @@ def word_csr_i(opcode, syntax, xregs, fregs, imms, symbols):
     return (tpe, insts)
 
 def word_sfence(opcode, syntax, xregs, fregs, imms, symbols):
-    tpe = NONE
+    # Treat sfence.vma as a memory-related op so the register allocator
+    # avoids choosing x0 for xreg0/xreg1 (GAS rejects `la x0, symbol`).
+    tpe = MEM_R
     pt_symbol = random.choice([ 'pt0', 'pt1', 'pt2', 'pt3' ])
 
     imms += [ ('uimm1', 1), ('uimm6', 8) ]

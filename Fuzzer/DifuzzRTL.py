@@ -1,16 +1,188 @@
 import os
 import time
 import signal
+import subprocess
+import random
 from datetime import datetime
 
 from cocotb.regression import TestFactory
 
-from src.utils import save_file
 from src.env_parser import envParser
 from src.multicore_manager import proc_state, procManager
+from src.signature_checker import sigChecker
+from src.mutator import rvMutator
+from src.inst_generator import rvInstGenerator
+from src.preprocessor_rv32 import rv32PreProcessor
+from src.utils import save_mismatch
+from IbexTB import run_ibex_program, append_random_data_to_signature_if_missing
 
-from Fuzzer import Run
-from Minimizer import Minimize
+
+def save_file(file_name, mode, line):
+    fd = open(file_name, mode)
+    fd.write(line)
+    fd.close()
+
+
+async def RunIbex(dut,
+                 toplevel=None,
+                 num_iter=1, template='Template', in_file=None,
+                 out='output', record=False, cov_log=None,
+                 multicore=0, manager=None, proc_num=0,
+                 start_time=0, start_iter=0, start_cov=0,
+                 prob_intr=0, no_guide=False, debug=False, **_kwargs):
+    """Generate RV32 stimuli and run them on ibex_top."""
+
+    max_cycles = int(os.environ.get('MAX_CYCLES', '200000'))
+    os.makedirs(out, exist_ok=True)
+
+
+
+    def _kill_process_group(p: subprocess.Popen):
+        # We run Spike in its own session so we can terminate the whole group.
+        try:
+            os.killpg(p.pid, signal.SIGTERM)
+        except Exception:
+            pass
+        try:
+            p.wait(timeout=0.2)
+            return
+        except Exception:
+            pass
+        try:
+            os.killpg(p.pid, signal.SIGKILL)
+        except Exception:
+            pass
+        try:
+            p.wait(timeout=0.2)
+        except Exception:
+            pass
+
+    def _pick_spike() -> str | None:
+        env_spike = os.environ.get('SPIKE')
+        if env_spike:
+            return env_spike
+        local_spike = os.path.join(os.path.dirname(__file__), 'ISASim', 'riscv-isa-sim', 'build', 'spike')
+        if os.path.isfile(local_spike) and os.access(local_spike, os.X_OK):
+            return local_spike
+        return None
+
+    def _run_spike_and_wait(sig_path: str, elf_path: str, timeout_sec: float = 1.0) -> int:
+        spike_bin = _pick_spike()
+        if not spike_bin:
+            return 0
+        spike_args = ['-l'] if debug else []
+        args = [spike_bin] + spike_args + [f'+signature={sig_path}', elf_path]
+        if debug:
+            p = subprocess.Popen(args, start_new_session=True)
+        else:
+            p = subprocess.Popen(
+                args,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+        try:
+            return p.wait(timeout=timeout_sec)
+        except subprocess.TimeoutExpired:
+            _kill_process_group(p)
+            return 124  # timeout marker
+
+
+    if cov_log is None:
+        date = datetime.today().strftime('%Y%m%d')
+        cov_log = out + '/cov_log_{}.txt'.format(date)
+
+    if not os.path.isfile(cov_log):
+        save_file(cov_log, 'w', '{:<10}\t{:<10}\t{:<10}\n'.format('time', 'iter', 'coverage'))
+
+    spike = _pick_spike()
+    isa_sigfile = os.path.join(out, f'.isa_sig_{proc_num}.txt')
+    rtl_sigfile = os.path.join(out, f'.rtl_sig_{proc_num}.txt')
+
+    mutator = rvMutator(no_guide=bool(no_guide))
+    mutator.inst_generator = rvInstGenerator('RV32IMzicsr_zifencei')
+    pre = rv32PreProcessor(
+        os.environ.get('CC', 'riscv64-unknown-elf-gcc'),
+        os.environ.get('ELF2HEX', 'riscv64-unknown-elf-elf2hex'),
+        template,
+        out,
+        proc_num=proc_num,
+    )
+
+    best_cov = -1
+    mNum = 0
+    iNum = 0
+    cNum = 0
+
+    for it in range(num_iter):
+        assert_intr = False
+        if float(prob_intr):
+            assert_intr = random.random() < float(prob_intr)
+
+        (sim_input, data) = mutator.get(assert_intr)
+
+        (isa_input, rtl_input, symbols) = pre.process(sim_input, data, assert_intr)
+        if not isa_input or not rtl_input:
+            break
+
+        si_path = os.path.join(out, f'.input_{proc_num}.si')
+        sym_path = os.path.join(out, f'.input_{proc_num}.symbols')
+
+        # ISA baseline (Spike) + signature, to align overhead with Rocket baseline.
+        if spike:
+            isa_rc = _run_spike_and_wait(isa_sigfile, isa_input.binary, timeout_sec=1.0)
+            if isa_rc == 124:
+                if record:
+                    save_mismatch(out, proc_num, os.path.join(out, 'illegal'), sim_input, data, iNum)
+                iNum += 1
+                mutator.update_phase(it)
+                continue
+            if isa_rc != 0:
+                break
+            append_random_data_to_signature_if_missing(isa_sigfile, symbols, si_path)
+
+        cov, _cycles = await run_ibex_program(
+            dut,
+            hex_path=rtl_input.hexfile,
+            symbols_path=sym_path,
+            si_path=si_path,
+            max_cycles=max_cycles,
+            reset_cov=False,
+            rtl_sig_path=rtl_sigfile,
+        )
+
+        # Rocket-like compare (structured sigChecker), keep quiet.
+        if spike:
+            checker = sigChecker(isa_sigfile, rtl_sigfile, debug=False, minimizing=True)
+            match = False
+            try:
+                match = checker.check(symbols)
+            except Exception:
+                match = False
+            if not match:
+                if record:
+                    save_mismatch(out, proc_num, os.path.join(out, 'mismatch'), sim_input, data, mNum)
+                mNum += 1
+
+        prev_best = best_cov
+
+        # Log every iteration (time series), keep monotonic coverage.
+        if cov < best_cov:
+            cov_to_log = best_cov
+        else:
+            best_cov = cov
+            cov_to_log = cov
+
+        save_file(cov_log, 'a', '{:<10}\t{:<10}\t{:<10}\n'.format(time.time() - start_time, it, cov_to_log))
+
+        if cov > prev_best:
+            if record:
+                os.makedirs(os.path.join(out, 'corpus'), exist_ok=True)
+                sim_input.save(os.path.join(out, 'corpus', f'id_{cNum}.si'), data)
+            cNum += 1
+            mutator.add_corpus(sim_input)
+
+        mutator.update_phase(it)
 
 ### Multicore Fuzzing ###
 
@@ -96,6 +268,7 @@ start_time = time.time()
 
 if not multicore:
     if minimize:
+        from Minimizer import Minimize
         factory = TestFactory(Minimize)
         factory.add_option('toplevel', [toplevel])
         factory.add_option('template', [template])
@@ -103,10 +276,19 @@ if not multicore:
         factory.add_option('debug', [debug])
 
     else:
-        factory = TestFactory(Run)
-        parser.register_option(factory)
-        factory.add_option('cov_log', [cov_log])
-        factory.add_option('start_time', [start_time])
+        if toplevel == 'ibex_top':
+            if multicore:
+                raise RuntimeError('ibex_top mode does not support multicore yet')
+            factory = TestFactory(RunIbex)
+            parser.register_option(factory)
+            factory.add_option('cov_log', [cov_log])
+            factory.add_option('start_time', [start_time])
+        else:
+            from Fuzzer import Run
+            factory = TestFactory(Run)
+            parser.register_option(factory)
+            factory.add_option('cov_log', [cov_log])
+            factory.add_option('start_time', [start_time])
 
     factory.generate_tests()
 

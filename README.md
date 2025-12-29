@@ -71,6 +71,23 @@ make SIM_BUILD=<build_dir> VFILE=<target> TOPLEVEL=<topmodule> NUM_ITER=<num_ite
 **RECORD**:    Set 1 to record coverage log  
 **DEBUG**:     Set 1 to print debug messages  
 
+### Baseline test (Ibex + Spike + signature compare)
+
+This mode treats `ibex_top` as a standalone DUT and runs, per-iteration:
+instruction generation/mutation (with corpus guidance) → compile → Spike ISA sim → RTL sim → signature compare.
+
+```
+source .venv/bin/activate
+cd Fuzzer
+make SIM=verilator VFILE=ibex TOPLEVEL=ibex_top MODULE=DifuzzRTL OUT=output TEMPLATE=Template NUM_ITER=200 MAX_CYCLES=200000 RECORD=0
+```
+
+Notes:
+- Spike is auto-detected from `Fuzzer/ISASim/riscv-isa-sim/build/spike` if `SPIKE` is not set.
+- Results:
+    - Coverage time series: `output/cov_log_YYYYMMDD.txt`
+    - Mismatches/illegal cases (only if `RECORD=1`): `output/mismatch/`, `output/illegal/`
+
 
 
 

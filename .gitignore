@@ -2,3 +2,9 @@ __pycache__
 .ccls-cache
 
 build
+
+# Local virtual environment
+.venv/
+
+# cocotb/verilator build outputs
+Fuzzer/sim_build/

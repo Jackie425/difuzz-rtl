@@ -74,7 +74,7 @@ rv32i_jtype = {
     'jal': ('jal xreg0, symbol', ('xreg0',), (), (), ('symbol',))
 }
 
-rv32i_rtype = {
+rv64i_rtype = {
     'addw'  : ('addw xreg0, xreg1, xreg2', ('xreg0', 'xreg1', 'xreg2',), (), (), ()),
     'subw'  : ('subw xreg0, xreg1, xreg2', ('xreg0', 'xreg1', 'xreg2',), (), (), ()),
     'sllw'  : ('sllw xreg0, xreg1, xreg2', ('xreg0', 'xreg1', 'xreg2',), (), (), ()),
@@ -315,6 +315,7 @@ rv32i.update(rv32i_jtype)
 rv32i.update(rv32i_utype)
 
 rv64i = {}
+rv64i.update(rv64i_rtype)
 rv64i.update(rv64i_itype)
 rv64i.update(rv64i_stype)
 

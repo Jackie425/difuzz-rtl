@@ -1,7 +1,10 @@
 import os
 import random
 import time
-import sysv_ipc as ipc
+try:
+    import sysv_ipc as ipc
+except Exception:
+    ipc = None
 import cocotb
 
 from cocotb.decorators import coroutine
@@ -37,6 +40,11 @@ proc_state = procState()
 
 class procManager():
     def __init__(self, multicore: int, out: str, date: str):
+        if ipc is None:
+            raise RuntimeError(
+                "sysv_ipc is required for MULTICORE runs. "
+                "Install it (e.g. `pip install sysv_ipc`) or run with MULTICORE=0."
+            )
         random.seed(time.time())
 
         self.out = out
