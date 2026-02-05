@@ -79,7 +79,7 @@ instruction generation/mutation (with corpus guidance) → compile → Spike ISA
 ```
 source .venv/bin/activate
 cd Fuzzer
-make SIM=verilator VFILE=ibex TOPLEVEL=ibex_top MODULE=DifuzzRTL OUT=output TEMPLATE=Template NUM_ITER=200 MAX_CYCLES=200000 RECORD=0
+make SIM=verilator VFILE=ibex TOPLEVEL=ibex_top MODULE=DifuzzRTL OUT=output TEMPLATE=Template NUM_ITER=200 MAX_CYCLES=6000 RECORD=1
 ```
 
 Notes:

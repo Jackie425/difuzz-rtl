@@ -13,7 +13,7 @@ def Run(dut, toplevel,
         num_iter=1, template='Template', in_file=None,
         out='output', record=False, cov_log=None,
         multicore=0, manager=None, proc_num=0, start_time=0, start_iter=0, start_cov=0,
-        prob_intr=0, no_guide=False, debug=False):
+        prob_intr=0, no_guide=False, debug=False, save_corpus=0, save_illegal=0, save_mismatch=0):
 
     assert toplevel in ['RocketTile', 'BoomTile' ], \
         '{} is not toplevel'.format(toplevel)
@@ -35,6 +35,10 @@ def Run(dut, toplevel,
 
     if multicore:
         yield manager.cov_restore(dut)
+
+    save_corpus = bool(save_corpus)
+    save_illegal = bool(save_illegal)
+    save_mismatch = bool(save_mismatch)
 
     for it in range(num_iter):
         debug_print('[DifuzzRTL] Iteration [{}]'.format(it), debug)
@@ -87,7 +91,7 @@ def Run(dut, toplevel,
                 match = True
                 debug_print('[DifuzzRTL] Memory access outside DRAM -- {}'. \
                             format(iNum), debug, True)
-                if record:
+                if record and save_illegal:
                     save_mismatch(out, proc_num, out + '/illegal',
                                   sim_input, data, iNum)
                 iNum += 1
@@ -97,7 +101,7 @@ def Run(dut, toplevel,
                     mNum = manager.read_num('mNum')
                     manager.write_num('mNum', mNum + 1)
 
-                if record:
+                if record and save_mismatch:
                     save_mismatch(out, proc_num, out + '/mismatch',
                                   sim_input, data, mNum)
 
@@ -114,7 +118,7 @@ def Run(dut, toplevel,
                     cNum = manager.read_num('cNum')
                     manager.write_num('cNum', cNum + 1)
 
-                if record:
+                if record and save_corpus:
                     save_file(cov_log, 'a', '{:<10}\t{:<10}\t{:<10}\n'.
                               format(time.time() - start_time, start_iter + it,
                                      start_cov + coverage))

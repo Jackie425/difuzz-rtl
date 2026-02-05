@@ -1,49 +1,57 @@
 # Minimal RV32 template for Ibex stimulus replay (Difuzz-compatible markers)
 
   .section .text.init
-  .align  2
-
-  # Ibex-specific boot/exception layout:
-  # - The linker places this section at 0x80000000.
-  # - Ibex reset PC fetches from boot_addr + 0x80.
-  # - Your Ibex variant jumps to boot_addr on exception.
-  # So we place a tiny vector table at boot_addr (0x0..0x7C), and put _start
-  # (reset entry) at +0x80.
-
-  .globl _boot_base
-_boot_base:
-  .rept 32
-    jal x0, trap_handler
-  .endr
-
+  .align  6
+  .weak stvec_handler
+  .weak mtvec_handler
   .globl _start
 _start:
-  la sp, _stack_top
-  la t0, trap_handler
-  csrw mtvec, t0
+  /* reset vector */
+  addi x1,  zero, 0
+  addi x2,  zero, 0
+  addi x3,  zero, 0
+  addi x4,  zero, 0
+  addi x5,  zero, 0
+  addi x6,  zero, 0
+  addi x7,  zero, 0
+  addi x8,  zero, 0
+  addi x9,  zero, 0
+  addi x10, zero, 0
+  addi x11, zero, 0
+  addi x12, zero, 0
+  addi x13, zero, 0
+  addi x14, zero, 0
+  addi x15, zero, 0
+  addi x16, zero, 0
+  addi x17, zero, 0
+  addi x18, zero, 0
+  addi x19, zero, 0
+  addi x20, zero, 0
+  addi x21, zero, 0
+  addi x22, zero, 0
+  addi x23, zero, 0
+  addi x24, zero, 0
+  addi x25, zero, 0
+  addi x26, zero, 0
+  addi x27, zero, 0
+  addi x28, zero, 0
+  addi x29, zero, 0
+  addi x30, zero, 0
+  addi x31, zero, 0
   j reset_vector
-
-trap_handler:
-  # Difuzz-style trap handling:
-  # - Interrupt: return immediately
-  # - Ecall (mcause==11): end test via tohost
-  # - Other exception: skip faulting insn (mepc += 4) and return
-  csrr t0, mcause
-  blt  t0, x0, 2f
-  li   t1, 11
-  beq  t0, t1, 3f
-  csrr t1, mepc
-  addi t1, t1, 4
-  csrw mepc, t1
-2:
-  mret
-3:
+trap_stvec:
+  ecall
+trap_mtvec:
+_fuzz_trap:
+  /* Fuzz trap */
+  /**/
   jal ra, write_signature
+write_tohost:
   li t0, 1
   la t1, tohost
   sw t0, 0(t1)
-4:
-  j 4b
+_test_end:
+  j _test_end
 
 write_signature:
   # Minimal, deterministic signature writer (RV32):
@@ -111,26 +119,27 @@ write_signature:
   ret
 
 reset_vector:
+  csrwi mstatus, 0
+  li t0, (3 << 11)
+  csrs mstatus, t0
+  la t0, trap_mtvec
+  csrw mtvec, t0
 _fuzz_prefix:
   /* Fuzz prefix */
   /**/
 _end_prefix:
-  j main
+  la t0, main
+  csrw mepc, t0
+  mret
 
-  .align 2
+  .align 6
 main:
 _fuzz_main:
   /* Fuzz main */
   /**/
 _end_main:
   ecall
-  j trap_handler
-
-_fuzz_suffix:
-  /* Fuzz suffix */
-  /**/
-_end_suffix:
-  j trap_handler
+  unimp
 
   .section .tohost,"aw",@progbits
   .align 4
@@ -342,43 +351,43 @@ pmpaddr7_output: .dword 0
 end_signature:
 
   # Random data blocks (filled by preprocessor)
-  .section .data.random0,"aw",@progbits
-  .align 3
+  .section .data.random0
+  .align 8
   .globl _random_data0
   .globl _end_data0
 _random_data0:
 _end_data0:
 
-  .section .data.random1,"aw",@progbits
-  .align 3
+  .section .data.random1
+  .align 8
   .globl _random_data1
   .globl _end_data1
 _random_data1:
 _end_data1:
 
-  .section .data.random2,"aw",@progbits
-  .align 3
+  .section .data.random2
+  .align 8
   .globl _random_data2
   .globl _end_data2
 _random_data2:
 _end_data2:
 
-  .section .data.random3,"aw",@progbits
-  .align 3
+  .section .data.random3
+  .align 8
   .globl _random_data3
   .globl _end_data3
 _random_data3:
 _end_data3:
 
-  .section .data.random4,"aw",@progbits
-  .align 3
+  .section .data.random4
+  .align 8
   .globl _random_data4
   .globl _end_data4
 _random_data4:
 _end_data4:
 
-  .section .data.random5,"aw",@progbits
-  .align 3
+  .section .data.random5
+  .align 8
   .globl _random_data5
   .globl _end_data5
 _random_data5:

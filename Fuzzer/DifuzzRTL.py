@@ -27,6 +27,7 @@ async def RunIbex(dut,
                  toplevel=None,
                  num_iter=1, template='Template', in_file=None,
                  out='output', record=False, cov_log=None,
+                 save_corpus=0, save_illegal=0, save_mismatch=0,
                  multicore=0, manager=None, proc_num=0,
                  start_time=0, start_iter=0, start_cov=0,
                  prob_intr=0, no_guide=False, debug=False, **_kwargs):
@@ -114,6 +115,10 @@ async def RunIbex(dut,
     iNum = 0
     cNum = 0
 
+    save_corpus = bool(save_corpus)
+    save_illegal = bool(save_illegal)
+    save_mismatch = bool(save_mismatch)
+
     for it in range(num_iter):
         assert_intr = False
         if float(prob_intr):
@@ -132,7 +137,7 @@ async def RunIbex(dut,
         if spike:
             isa_rc = _run_spike_and_wait(isa_sigfile, isa_input.binary, timeout_sec=1.0)
             if isa_rc == 124:
-                if record:
+                if record and save_illegal:
                     save_mismatch(out, proc_num, os.path.join(out, 'illegal'), sim_input, data, iNum)
                 iNum += 1
                 mutator.update_phase(it)
@@ -160,7 +165,7 @@ async def RunIbex(dut,
             except Exception:
                 match = False
             if not match:
-                if record:
+                if record and save_mismatch:
                     save_mismatch(out, proc_num, os.path.join(out, 'mismatch'), sim_input, data, mNum)
                 mNum += 1
 
@@ -176,7 +181,7 @@ async def RunIbex(dut,
         save_file(cov_log, 'a', '{:<10}\t{:<10}\t{:<10}\n'.format(time.time() - start_time, it, cov_to_log))
 
         if cov > prev_best:
-            if record:
+            if record and save_corpus:
                 os.makedirs(os.path.join(out, 'corpus'), exist_ok=True)
                 sim_input.save(os.path.join(out, 'corpus', f'id_{cNum}.si'), data)
             cNum += 1
@@ -218,6 +223,9 @@ parser.add_option('template', 'Template', 'Template test file location')
 parser.add_option('in_file', None, 'SimInput to replay')
 parser.add_option('out', 'output', 'Directory to save the result')
 parser.add_option('record', 0, 'Record the result')
+parser.add_option('save_corpus', 0, 'Save corpus to out/corpus')
+parser.add_option('save_illegal', 0, 'Save illegal cases to out/illegal')
+parser.add_option('save_mismatch', 0, 'Save mismatch cases to out/mismatch')
 parser.add_option('multicore', 0, 'The number of cores to use')
 parser.add_option('debug', 0, 'Debugging?')
 parser.add_option('minimize', 0, 'Minimizing?')
@@ -229,6 +237,9 @@ parser.parse_option()
 
 out = parser.arg_map['out'][0]
 record = parser.arg_map['record'][0]
+save_corpus = bool(parser.arg_map['save_corpus'][0])
+save_illegal = bool(parser.arg_map['save_illegal'][0])
+save_mismatch = bool(parser.arg_map['save_mismatch'][0])
 multicore = min(parser.arg_map['multicore'][0], 40)
 minimize = parser.arg_map['minimize'][0]
 parser.arg_map.pop('minimize', None)
@@ -241,21 +252,21 @@ debug = parser.arg_map['debug'][0]
 if not os.path.isdir(out):
     os.makedirs(out)
 
-if not os.path.isdir(out + '/mismatch'):
+if record and save_mismatch and not os.path.isdir(out + '/mismatch'):
     os.makedirs(out + '/mismatch')
     os.makedirs(out + '/mismatch/sim_input')
     os.makedirs(out + '/mismatch/elf')
     os.makedirs(out + '/mismatch/asm')
     os.makedirs(out + '/mismatch/hex')
 
-if not os.path.isdir(out + '/illegal'):
+if record and save_illegal and not os.path.isdir(out + '/illegal'):
     os.makedirs(out + '/illegal')
     os.makedirs(out + '/illegal/sim_input')
     os.makedirs(out + '/illegal/elf')
     os.makedirs(out + '/illegal/asm')
     os.makedirs(out + '/illegal/hex')
 
-if not os.path.isdir(out + '/corpus'):
+if record and save_corpus and not os.path.isdir(out + '/corpus'):
     os.makedirs(out + '/corpus')
 
 date = datetime.today().strftime('%Y%m%d')
