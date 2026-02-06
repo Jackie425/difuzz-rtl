@@ -33,7 +33,7 @@ async def RunIbex(dut,
                  prob_intr=0, no_guide=False, debug=False, **_kwargs):
     """Generate RV32 stimuli and run them on ibex_top."""
 
-    max_cycles = int(os.environ.get('MAX_CYCLES', '200000'))
+    max_cycles_override = os.environ.get('MAX_CYCLES')
     os.makedirs(out, exist_ok=True)
 
 
@@ -145,6 +145,11 @@ async def RunIbex(dut,
             if isa_rc != 0:
                 break
             append_random_data_to_signature_if_missing(isa_sigfile, symbols, si_path)
+
+        if max_cycles_override is None:
+            max_cycles = rtl_input.max_cycles
+        else:
+            max_cycles = int(max_cycles_override)
 
         cov, _cycles = await run_ibex_program(
             dut,

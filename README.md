@@ -84,10 +84,10 @@ make SIM=verilator VFILE=ibex TOPLEVEL=ibex_top MODULE=DifuzzRTL OUT=output TEMP
 
 Notes:
 - Spike is auto-detected from `Fuzzer/ISASim/riscv-isa-sim/build/spike` if `SPIKE` is not set.
+- RTL timeout defaults follow Rocket-style templates: `p-m/p-s/p-u = 6000`, `v-u = 200000`.
+- You can still force a global timeout with `MAX_CYCLES=<N>`.
 - Results:
     - Coverage time series: `output/cov_log_YYYYMMDD.txt`
     - Mismatches/illegal cases (only if `RECORD=1`): `output/mismatch/`, `output/illegal/`
-
-
 
 

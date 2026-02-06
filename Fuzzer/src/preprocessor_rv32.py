@@ -3,7 +3,7 @@ import subprocess
 
 from ISASim.host import isaInput
 from RTLSim.host import rtlInput
-from mutator import simInput, templates
+from mutator import simInput, templates, V_U
 
 
 class rv32PreProcessor:
@@ -137,7 +137,13 @@ class rv32PreProcessor:
         subprocess.call(self.elf2hex_args + [elf_name, "--output", hex_name])
         symbols = self.get_symbols(elf_name, sym_name)
 
+        # Keep timeout policy aligned with RV64 baseline:
+        # p-m/p-s/p-u => 6000, v-u => 200000
+        max_cycles = 6000
+        if version in [V_U]:
+            max_cycles = 200000
+
         # Keep return signature consistent with baseline preprocessor.
         isa_input = isaInput(elf_name, "")
-        rtl_input = rtlInput(hex_name, "", data, symbols, max_cycles=200000)
+        rtl_input = rtlInput(hex_name, "", data, symbols, max_cycles=max_cycles)
         return (isa_input, rtl_input, symbols)
