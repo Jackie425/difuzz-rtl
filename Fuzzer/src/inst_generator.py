@@ -13,7 +13,14 @@ Properties
 """
 class rvInstGenerator():
     def __init__(self, isa='RV64G'):
-        isas = ['trap_ret']
+        profile = os.environ.get('CSR_PROFILE', '').lower()
+        toplevel = os.environ.get('TOPLEVEL', '').lower()
+        vfile = os.environ.get('VFILE', '').lower()
+        ibex_target = profile == 'ibex' or toplevel == 'ibex_top' or 'ibex' in vfile
+
+        isas = []
+        if not ibex_target:
+            isas += ['trap_ret']
 
         if 'I' in isa:
             isas += [ 'rv32i' ]

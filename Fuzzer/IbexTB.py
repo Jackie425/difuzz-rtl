@@ -225,11 +225,29 @@ async def run_ibex_program(
     symbols = _parse_nm_symbols(symbols_path)
 
     load_addr = symbols.get("_boot_base")
+    start = symbols.get("_start")
     if load_addr is None:
-        start = symbols.get("_start", 0)
-        load_addr = start & ~0xFF
+        # elf2hex output starts at the program image base (typically _start).
+        # Use _start directly to avoid shifting the whole image by 0x80.
+        if start is None:
+            start = 0
+        load_addr = start
 
-    boot_addr = load_addr
+    # Ibex reset fetch target is derived as {boot_addr_i[31:8], 8'h80}.
+    # boot_addr_i low 8 bits are ignored for the reset fetch address.
+    if start is not None:
+        boot_addr = start & ~0xFF
+    else:
+        boot_addr = load_addr & ~0xFF
+
+    fetch_start = ((boot_addr & 0xFFFFFFFF) & ~0xFF) | 0x80
+    if start is not None and ((start & 0xFF) != 0x80):
+        cocotb.log.warning(
+            "Ibex reset fetch address mismatch: fetch_start=0x%08x _start=0x%08x "
+            "(_start low byte should be 0x80 for Ibex reset fetch).",
+            fetch_start,
+            start & 0xFFFFFFFF,
+        )
 
     _drive_ibex_defaults(dut, boot_addr=boot_addr, pcov_meta_reset=bool(reset_cov))
 
@@ -248,21 +266,6 @@ async def run_ibex_program(
             cocotb.fork(clock_gen())
         run_ibex_program._clock_started = True
 
-    dut.rst_ni.value = 0
-    if hasattr(dut, "scan_rst_ni"):
-        dut.scan_rst_ni.value = 0
-    for _ in range(5):
-        await RisingEdge(dut.clk_i)
-
-    if hasattr(dut, "pcov_meta_reset") and reset_cov:
-        dut.pcov_meta_reset.value = 0
-
-    dut.rst_ni.value = 1
-    if hasattr(dut, "scan_rst_ni"):
-        dut.scan_rst_ni.value = 1
-    for _ in range(5):
-        await RisingEdge(dut.clk_i)
-
     mem = SimpleMem32()
     mem.load_hex64(load_addr, _load_hex64_lines(hex_path))
 
@@ -280,6 +283,23 @@ async def run_ibex_program(
                     break
                 mem.write64(s + i * 8, data_words[offset + i])
             offset += n_qwords
+
+    # Keep program/data image ready before reset release so first fetch sees
+    # valid contents at the reset vector target.
+    dut.rst_ni.value = 0
+    if hasattr(dut, "scan_rst_ni"):
+        dut.scan_rst_ni.value = 0
+    for _ in range(5):
+        await RisingEdge(dut.clk_i)
+
+    if hasattr(dut, "pcov_meta_reset") and reset_cov:
+        dut.pcov_meta_reset.value = 0
+
+    dut.rst_ni.value = 1
+    if hasattr(dut, "scan_rst_ni"):
+        dut.scan_rst_ni.value = 1
+    for _ in range(5):
+        await RisingEdge(dut.clk_i)
 
     def get_cov() -> int:
         if hasattr(dut, "pcov_regcov_covsum"):

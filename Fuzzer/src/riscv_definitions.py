@@ -390,6 +390,15 @@ csr_names = ( 'fflags', 'frm', 'fcsr',
               'mhartid', 'mstatus', 'medeleg', 'mie', 'mscratch', 'mepc', 'mcause', 'mtval', 'mip',
               'pmpcfg0', 'pmpaddr0', 'pmpaddr1', 'pmpaddr2', 'pmpaddr3', 'pmpaddr4',
               'pmpaddr5', 'pmpaddr6', 'pmpaddr7' ,)
+
+# Ibex-oriented CSR pool for instruction generation.
+# Keep this list writable and low-side-effect to reduce early traps.
+csr_names_ibex_gen = (
+    'mscratch',
+    'mepc',
+    'mcause',
+    'mtval',
+)
 # ['ustatus', 'uie', 'uepc', 'ucause', 'utval', 'uip']
 # ['sedeleg', 'sideleg']
 # ['pmpcfg1', 'pmpcfg2', 'pmpcfg3']

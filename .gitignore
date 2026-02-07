@@ -10,3 +10,5 @@ build
 Fuzzer/sim_build/
 
 */output
+*.xml
+*.vcd

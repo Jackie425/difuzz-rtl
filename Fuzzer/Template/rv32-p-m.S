@@ -39,13 +39,12 @@ _start:
   addi x30, zero, 0
   addi x31, zero, 0
   j reset_vector
-trap_stvec:
-  ecall
-trap_mtvec:
-_fuzz_trap:
-  /* Fuzz trap */
-  /**/
-  jal ra, write_signature
+ trap_stvec:
+ trap_mtvec:
+ _fuzz_trap:
+   /* Fuzz trap */
+   /**/
+   jal ra, write_signature
 write_tohost:
   li t0, 1
   la t1, tohost

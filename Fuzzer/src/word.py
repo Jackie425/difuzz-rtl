@@ -15,6 +15,18 @@ PREFIX = '_p'
 MAIN   = '_l'
 SUFFIX = '_s'
 
+def _select_csr_pool():
+    profile = os.environ.get('CSR_PROFILE', '').lower()
+    toplevel = os.environ.get('TOPLEVEL', '').lower()
+    vfile = os.environ.get('VFILE', '').lower()
+
+    if profile == 'ibex' or toplevel == 'ibex_top' or 'ibex' in vfile:
+        return csr_names_ibex_gen
+    return csr_names
+
+
+CSR_POOL = _select_csr_pool()
+
 class Word():
     def __init__(self, label: int, insts: list, tpe=NONE, xregs=[], fregs=[], imms=[], symbols=[], populated=False):
         self.label = label
@@ -180,7 +192,7 @@ def word_atomic(opcode, syntax, xregs, fregs, imms, symbols):
     return (tpe, insts)
 
 def word_csr_r(opcode, syntax, xregs, fregs, imms, symbols):
-    csr = random.choice(csr_names)
+    csr = random.choice(CSR_POOL)
 
     if 'pmpaddr' in csr:
         tpe = MEM_R
@@ -206,7 +218,7 @@ def word_csr_r(opcode, syntax, xregs, fregs, imms, symbols):
 
 def word_csr_i(opcode, syntax, xregs, fregs, imms, symbols):
     tpe = CSR
-    csr = random.choice(csr_names)
+    csr = random.choice(CSR_POOL)
 
     insts = [ syntax.format(csr) ]
 

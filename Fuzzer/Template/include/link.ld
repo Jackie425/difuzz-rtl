@@ -3,7 +3,8 @@ ENTRY(_start)
 
 SECTIONS
 {
-  . = 0x80000000;
+  /* Ibex reset fetch address is derived from boot address with low byte fixed to 0x80. */
+  . = 0x80000080;
   .text.init : { *(.text.init) }
   . = ALIGN(0x1000);
   .tohost : { *(.tohost) }

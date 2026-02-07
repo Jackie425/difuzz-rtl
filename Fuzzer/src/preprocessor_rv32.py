@@ -1,4 +1,5 @@
 import os
+import re
 import subprocess
 
 from ISASim.host import isaInput
@@ -92,6 +93,22 @@ class rv32PreProcessor:
 
         with open(test_template, "r") as fd:
             template_lines = fd.readlines()
+
+        # Some RV32 template variants are thin wrappers that only include
+        # rv32-p-m.S. Expand one local include so fuzz markers are visible.
+        has_markers = any(("_fuzz_prefix:" in ln) or ("_fuzz_main:" in ln) or ("_fuzz_suffix:" in ln)
+                          for ln in template_lines)
+        if not has_markers:
+            for ln in template_lines:
+                m = re.match(r'^\s*#include\s+"([^"]+)"\s*$', ln)
+                if not m:
+                    continue
+                inc_name = m.group(1)
+                inc_path = os.path.join(os.path.dirname(test_template), inc_name)
+                if os.path.isfile(inc_path):
+                    with open(inc_path, "r") as ifd:
+                        template_lines = ifd.readlines()
+                break
 
         assembly = []
         for line in template_lines:
