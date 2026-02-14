@@ -1,0 +1,3 @@
+[submodule "elf2hex"]
+	path = elf2hex
+	url = https://github.com/sifive/elf2hex.git

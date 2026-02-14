@@ -1,13 +1,21 @@
 #!/bin/bash
 
 # Install elf2hex
-git clone https://github.com/sifive/elf2hex.git
+cd "$(dirname "${BASH_SOURCE[0]}")"
+ELF2HEX_PREFIX=${PWD}/../env/elf2hex
+
+# Fetch elf2hex source via submodule
+git submodule update --init elf2hex
+
 pushd elf2hex > /dev/null
 autoreconf -i
-./configure --target=riscv64-unknown-elf
-make
-sudo make install
+./configure --target=riscv64-unknown-elf --prefix=${ELF2HEX_PREFIX}
+make -j"$(nproc)"
+make install
 popd > /dev/null
+
+# Make elf2hex visible in the current shell session.
+export PATH=${ELF2HEX_PREFIX}/bin:$PATH
 
 # Build riscv-isa-sim
 pushd Fuzzer/ISASim/riscv-isa-sim > /dev/null
