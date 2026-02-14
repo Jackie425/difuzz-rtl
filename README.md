@@ -62,8 +62,9 @@ make SIM_BUILD=<build_dir> VFILE=<target> TOPLEVEL=<topmodule> NUM_ITER=<num_ite
 ```
 
 **SIM_BUILD**: Directory for RTL simulation binary build by cocotb  
-**VFILE**:     Target RTL design in DifuzzRTL/Benchmarks/Verilog/  
-           (e.g., RocketTile_state, SmallBoomTile_v_1.2_state, SmallBoomTile_v1.3_state)  
+**VFILE**:     RTL input file, supports two forms  
+           1) Basename only (default lookup under `DifuzzRTL/Benchmarks/Verilog/`, e.g. `ibex`, `RocketTile_state`)  
+           2) Direct file path (relative or absolute, e.g. `../../PacerFuzz/benchmark/ibex/build/ibex.sv`)  
 **TOPLEVEL**:  Top-level module  
            (e.g., RocketTile or BoomTile)  
 **NUM_ITER**:  Number of fuzzing iterations to run  
@@ -80,6 +81,9 @@ instruction generation/mutation (with corpus guidance) → compile → Spike ISA
 source .venv/bin/activate
 cd Fuzzer
 make SIM=verilator VFILE=ibex TOPLEVEL=ibex_top MODULE=DifuzzRTL OUT=output TEMPLATE=Template NUM_ITER=200 MAX_CYCLES=6000 RECORD=1
+
+# Or specify an external RTL file path directly
+make SIM=verilator VFILE=../../PacerFuzz/benchmark/ibex/build/ibex.sv TOPLEVEL=ibex_top MODULE=DifuzzRTL OUT=output TEMPLATE=Template NUM_ITER=200 MAX_CYCLES=6000 RECORD=1
 ```
 
 Notes:

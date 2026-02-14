@@ -27,21 +27,38 @@ TOPLEVEL ?= $(VFILE)
 # or VFILE=foo.sv / VFILE=foo.v explicitly.
 VFILE_BASENAME := $(basename $(VFILE))
 VFILE_EXT := $(suffix $(VFILE))
+VFILE_HAS_PATH := $(findstring /,$(VFILE))
 
 # Extra args accumulated during source selection (e.g. -sv)
 COMPILE_ARGS_EXTRA :=
 
-ifeq ($(VFILE_EXT),)
-    ifneq ($(wildcard $(CWD)/../Benchmarks/Verilog/$(VFILE_BASENAME).sv),)
-        VERILOG_SOURCES = $(CWD)/../Benchmarks/Verilog/$(VFILE_BASENAME).sv
-        COMPILE_ARGS_EXTRA += -sv
+ifeq ($(strip $(VFILE_HAS_PATH)),)
+    ifeq ($(VFILE_EXT),)
+        ifneq ($(wildcard $(CWD)/../Benchmarks/Verilog/$(VFILE_BASENAME).sv),)
+            VERILOG_SOURCES = $(CWD)/../Benchmarks/Verilog/$(VFILE_BASENAME).sv
+            COMPILE_ARGS_EXTRA += -sv
+        else
+            VERILOG_SOURCES = $(CWD)/../Benchmarks/Verilog/$(VFILE_BASENAME).v
+        endif
     else
-        VERILOG_SOURCES = $(CWD)/../Benchmarks/Verilog/$(VFILE_BASENAME).v
+        VERILOG_SOURCES = $(CWD)/../Benchmarks/Verilog/$(VFILE)
+        ifeq ($(VFILE_EXT),.sv)
+            COMPILE_ARGS_EXTRA += -sv
+        endif
     endif
 else
-    VERILOG_SOURCES = $(CWD)/../Benchmarks/Verilog/$(VFILE)
-    ifeq ($(VFILE_EXT),.sv)
-        COMPILE_ARGS_EXTRA += -sv
+    ifeq ($(VFILE_EXT),)
+        ifneq ($(wildcard $(VFILE_BASENAME).sv),)
+            VERILOG_SOURCES = $(VFILE_BASENAME).sv
+            COMPILE_ARGS_EXTRA += -sv
+        else
+            VERILOG_SOURCES = $(VFILE_BASENAME).v
+        endif
+    else
+        VERILOG_SOURCES = $(VFILE)
+        ifeq ($(VFILE_EXT),.sv)
+            COMPILE_ARGS_EXTRA += -sv
+        endif
     endif
 endif
 COCOTB_HDL_TIMEUNIT=1us
