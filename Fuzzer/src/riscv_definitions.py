@@ -398,6 +398,10 @@ csr_names_ibex_gen = (
     'mepc',
     'mcause',
     'mtval',
+    'mhartid',
+    'mstatus',
+    'mie',
+    'mip',
 )
 # ['ustatus', 'uie', 'uepc', 'ucause', 'utval', 'uip']
 # ['sedeleg', 'sideleg']

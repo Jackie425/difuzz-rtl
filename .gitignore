@@ -9,6 +9,6 @@ build
 # cocotb/verilator build outputs
 Fuzzer/sim_build/
 
-*/output
+*/output*
 *.xml
 *.vcd
