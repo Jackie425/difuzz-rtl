@@ -1,5 +1,3 @@
-import os
-
 from riscv_definitions import *
 
 class sigChecker():
@@ -113,6 +111,9 @@ class sigChecker():
 
     def check(self, symbols):
 
+        if symbols.get('_signature_format') == 'rv32':
+            return self._check_rv32()
+
         (xreg_idxes, freg_idxes, csr_idxes, data_symbols, data_idx_start) = \
             self.read_symbols(symbols)
 
@@ -168,3 +169,19 @@ class sigChecker():
                                      format(addr, isa_word, rtl_word), not match)
 
         return (xreg_match & freg_match & csr_match & data_match)
+
+    def _check_rv32(self):
+        with open(self.isa_sigfile) as stream:
+            isa = [int(line, 16) for line in stream if line.strip()]
+        with open(self.rtl_sigfile) as stream:
+            rtl = [int(line, 16) for line in stream if line.strip()]
+        if len(isa) != len(rtl):
+            self.debug_print('Signature size mismatch: ISA={} RTL={}'.format(len(isa), len(rtl)), True)
+            return False
+        match = True
+        for idx, (isa_value, rtl_value) in enumerate(zip(isa, rtl)):
+            if isa_value != rtl_value:
+                match = False
+                self.debug_print('signature[{}] ISA={:08x} RTL={:08x}'.format(
+                    idx, isa_value, rtl_value), True)
+        return match

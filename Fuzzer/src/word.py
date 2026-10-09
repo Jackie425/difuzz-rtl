@@ -1,5 +1,5 @@
-import os
 import random
+from dut_profile import profile
 
 from riscv_definitions import *
 
@@ -129,7 +129,7 @@ def word_ret(opcode, syntax, xregs, fregs, imms, symbols):
 def word_mem_r(opcode, syntax, xregs, fregs, imms, symbols):
     tpe = MEM_R
     rand = random.random()
-    if rand < 0.1:
+    if rand < profile().get('memory_fault_probability', 0.1):
         mask_addr = [ 'lui xreg2, 0xffe00',
                       'xor xreg1, xreg1, xreg2' ]
         xregs.append('xreg2')
@@ -144,7 +144,7 @@ def word_mem_r(opcode, syntax, xregs, fregs, imms, symbols):
 def word_mem_w(opcode, syntax, xregs, fregs, imms, symbols):
     tpe = MEM_W
     rand = random.random()
-    if rand < 0.1:
+    if rand < profile().get('memory_fault_probability', 0.1):
         mask_addr = [ 'lui xreg2, 0xffe00',
                       'xor xreg1, xreg1, xreg2' ]
         xregs.append('xreg2')
@@ -159,7 +159,7 @@ def word_mem_w(opcode, syntax, xregs, fregs, imms, symbols):
 def word_atomic(opcode, syntax, xregs, fregs, imms, symbols):
     tpe = MEM_W
     rand = random.random()
-    if rand < 0.1:
+    if rand < profile().get('memory_fault_probability', 0.1):
         mask_addr = [ 'lui xreg2, 0xffe00',
                       'xor xreg1, xreg1, xreg2' ]
         xregs.append('xreg2')
@@ -179,8 +179,12 @@ def word_atomic(opcode, syntax, xregs, fregs, imms, symbols):
 
     return (tpe, insts)
 
+def _csr_pool():
+    return profile().get('csr_names', csr_names)
+
+
 def word_csr_r(opcode, syntax, xregs, fregs, imms, symbols):
-    csr = random.choice(csr_names)
+    csr = random.choice(_csr_pool())
 
     if 'pmpaddr' in csr:
         tpe = MEM_R
@@ -206,7 +210,7 @@ def word_csr_r(opcode, syntax, xregs, fregs, imms, symbols):
 
 def word_csr_i(opcode, syntax, xregs, fregs, imms, symbols):
     tpe = CSR
-    csr = random.choice(csr_names)
+    csr = random.choice(_csr_pool())
 
     insts = [ syntax.format(csr) ]
 

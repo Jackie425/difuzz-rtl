@@ -1,4 +1,3 @@
-import sys
 import os
 import subprocess
 
@@ -13,7 +12,7 @@ class rvISAhost():
         self.spike_args = spike_args
         self.isa_sigfile = isa_sigfile
 
-        self.debug= debug
+        self.debug = debug
 
     def debug_print(self, message):
         if self.debug:
@@ -21,11 +20,19 @@ class rvISAhost():
 
     def run_test(self, isa_input: isaInput, assert_intr=False):
         binary = isa_input.binary
-        if assert_intr: intr = [ '--intr={}'.format(isa_input.intrfile) ]
-        else: intr = []
+        intr = ['--intr={}'.format(isa_input.intrfile)] if assert_intr else []
 
-        args = [ self.spike ] + self.spike_args + intr + \
+        audit = ['-l', '--log-commits'] if os.environ.get('ILL_MEM_AUDIT') == '1' else []
+        args = [ self.spike ] + self.spike_args + intr + audit + \
             [ '+signature={}'.format(self.isa_sigfile), binary ]
 
         self.debug_print('[ISAHost] Start ISA simulation')
-        return subprocess.call(args)
+        try:
+            return subprocess.call(args, timeout=float(os.environ.get('ISA_TIMEOUT', '10')))
+        except subprocess.TimeoutExpired:
+            return 124
+
+    def set_start_pc(self, address):
+        self.spike_args = [arg for arg in self.spike_args
+                           if not arg.startswith('--pc=')]
+        self.spike_args.insert(1, '--pc={}'.format(hex(address)))

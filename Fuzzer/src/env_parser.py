@@ -1,4 +1,3 @@
-import sys
 import os
 from pydoc import locate
 

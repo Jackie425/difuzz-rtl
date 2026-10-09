@@ -123,6 +123,32 @@ rv32m_rtype = {
     'remu'  : ('remu xreg0, xreg1, xreg2'  , ('xreg0', 'xreg1', 'xreg2',), (), (), ())
 }
 
+rv32zba = {}
+for _name in ('sh1add', 'sh2add', 'sh3add'):
+    rv32zba[_name] = ('{} xreg0, xreg1, xreg2'.format(_name),
+                      ('xreg0', 'xreg1', 'xreg2'), (), (), ())
+
+rv32zbb = {}
+for _name in ('andn', 'orn', 'xnor', 'rol', 'ror', 'min', 'minu', 'max', 'maxu'):
+    rv32zbb[_name] = ('{} xreg0, xreg1, xreg2'.format(_name),
+                      ('xreg0', 'xreg1', 'xreg2'), (), (), ())
+for _name in ('clz', 'ctz', 'cpop', 'sext.b', 'sext.h', 'zext.h', 'orc.b', 'rev8'):
+    rv32zbb[_name] = ('{} xreg0, xreg1'.format(_name),
+                      ('xreg0', 'xreg1'), (), (), ())
+
+rv32zbc = {}
+for _name in ('clmul', 'clmulh', 'clmulr'):
+    rv32zbc[_name] = ('{} xreg0, xreg1, xreg2'.format(_name),
+                      ('xreg0', 'xreg1', 'xreg2'), (), (), ())
+
+rv32zbs = {}
+for _name in ('bset', 'bclr', 'binv', 'bext'):
+    rv32zbs[_name] = ('{} xreg0, xreg1, xreg2'.format(_name),
+                      ('xreg0', 'xreg1', 'xreg2'), (), (), ())
+for _name in ('bseti', 'bclri', 'binvi', 'bexti'):
+    rv32zbs[_name] = ('{} xreg0, xreg1, uimm5'.format(_name),
+                      ('xreg0', 'xreg1'), (), (('uimm5', 1),), ())
+
 rv64m_rtype = {
     'mulw' : ('mulw xreg0, xreg1, xreg2' , ('xreg0', 'xreg1', 'xreg2',), (), (), ()),
     'divw' : ('divw xreg0, xreg1, xreg2' , ('xreg0', 'xreg1', 'xreg2',), (), (), ()),
@@ -215,16 +241,16 @@ rv32d_rtype = {
     'fsgnjx.d' : ('fsgnjx.d freg0, freg1, freg2'  , ()       , ('freg0', 'freg1', 'freg2',), (), ()), # rm: J(N,)/JX
     'fmin.d'   : ('fmin.d freg0, freg1, freg2'    , ()       , ('freg0', 'freg1', 'freg2',), (), ()), # rm: MIN/MAX
     'fmax.d'   : ('fmax.d freg0, freg1, freg2'    , ()       , ('freg0', 'freg1', 'freg2',), (), ()), # rm: MIN/MAX
-    'fcvt.d.s' : ('fcvt.d.s freg0, freg0, {}'     , ()       , ('freg0', 'freg1',)         , (), ()),
-    'fcvt.s.d' : ('fcvt.s.d freg0, freg0, {}'     , ()       , ('freg0', 'freg1',)         , (), ()),
+    'fcvt.d.s' : ('fcvt.d.s freg0, freg0'         , ()       , ('freg0', 'freg1',)         , (), ()),
+    'fcvt.s.d' : ('fcvt.s.d freg0, freg0'         , ()       , ('freg0', 'freg1',)         , (), ()),
     'feq.d'    : ('feq.d xreg0, freg0, freg1'     , ('xreg0',), ('freg0', 'freg1',)         , (), ()),
     'flt.d'    : ('flt.d xreg0, freg0, freg1'     , ('xreg0',), ('freg0', 'freg1',)         , (), ()),
     'fle.d'    : ('fle.d xreg0, freg0, freg1'     , ('xreg0',), ('freg0', 'freg1',)         , (), ()),
     'fclass.d' : ('fclass.d xreg0, freg0'         , ('xreg0',), ('freg0',)                  , (), ()),
     'fcvt.w.d' : ('fcvt.w.d xreg0, freg0, {}'     , ('xreg0',), ('freg0',)                  , (), ()),
     'fcvt.wu.d': ('fcvt.wu.d xreg0, freg0, {}'    , ('xreg0',), ('freg0',)                  , (), ()),
-    'fcvt.d.w' : ('fcvt.d.w freg0, xreg0, {}'     , ('xreg0',), ('freg0',)                  , (), ()),
-    'fcvt.d.wu': ('fcvt.d.wu freg0, xreg0, {}'    , ('xreg0',), ('freg0',)                  , (), ())
+    'fcvt.d.w' : ('fcvt.d.w freg0, xreg0'         , ('xreg0',), ('freg0',)                  , (), ()),
+    'fcvt.d.wu': ('fcvt.d.wu freg0, xreg0'        , ('xreg0',), ('freg0',)                  , (), ())
 }
 
 rv32d_r4type = {
@@ -362,6 +388,10 @@ rv_opcodes = {
     'rv_zifencei': rv_zifencei,
     'rv_zicsr': rv_zicsr,
     'rv32m': rv32m,
+    'rv32zba': rv32zba,
+    'rv32zbb': rv32zbb,
+    'rv32zbc': rv32zbc,
+    'rv32zbs': rv32zbs,
     'rv64m': rv64m,
     'rv32a': rv32a,
     'rv64a': rv64a,

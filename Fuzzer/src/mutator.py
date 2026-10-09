@@ -2,6 +2,8 @@ import os
 import random
 from copy import deepcopy
 
+from dut_profile import profile
+
 from inst_generator import Word, rvInstGenerator, PREFIX, MAIN, SUFFIX
 
 """ Mutation phases """
@@ -91,25 +93,30 @@ class simInput():
 
 
 class rvMutator():
-    def __init__(self, max_data_seeds=100, corpus_size=1000, no_guide=False):
+    def __init__(self, max_data_seeds=100, corpus_size=1000, no_guide=False,
+                 isa='RV64G', template_max=V_U, data_sections=6,
+                 data_words_per_section=64):
         self.corpus_size = corpus_size
         self.corpus = []
 
         self.phases = [GENERATION, MUTATION, MERGE]
         self.phase = GENERATION
 
-        self.num_prefix = 3
-        self.num_words = 100
+        self.profile = profile()
+        self.num_prefix = self.profile.get('prefix_words', 3)
+        self.num_words = self.profile.get('initial_words', 100)
         self.num_suffix = 5
-
-        self.max_nWords = 200
+        self.max_nWords = self.profile.get('max_words', 200)
         self.no_guide = no_guide
 
         self.max_data = max_data_seeds
         self.random_data = {}
         self.data_seeds = []
 
-        self.inst_generator = rvInstGenerator('RV64G')
+        self.inst_generator = rvInstGenerator(isa)
+        self.template_max = self.profile.get('template_id', template_max)
+        self.data_sections = data_sections
+        self.data_words_per_section = data_words_per_section
 
     def add_data(self, new_data=[]):
         if len(self.data_seeds) == self.max_data:
@@ -120,7 +127,10 @@ class rvMutator():
         if new_data:
             self.random_data[seed] = new_data
         else:
-            self.random_data[seed] = [ random.randint(0, 0xffffffffffffffff) for i in range(64 * 6)] # TODO, Num_data_sections = 6
+            mask = (1 << self.inst_generator.xlen) - 1
+            self.random_data[seed] = [
+                random.randint(0, mask)
+                for _ in range(self.data_words_per_section * self.data_sections)]
         self.data_seeds.append(seed)
 
         return seed
@@ -363,7 +373,7 @@ class rvMutator():
 
         data_seed = -1
         template = -1
-        if self.phase == GENERATION:
+        if self.phase == GENERATION or not self.corpus:
             for n in range(self.num_prefix):
                 word = self.inst_generator.get_word(PREFIX)
                 prefix.append(word)
@@ -428,7 +438,7 @@ class rvMutator():
             self.update_data_seeds(data_seed)
 
         if template == -1:
-            template = random.randint(0, V_U)
+            template = self.profile.get('template_id', random.randint(0, self.template_max))
 
         sim_input = simInput(prefix, words, suffix, ints, data_seed, template)
         data = self.random_data[data_seed]

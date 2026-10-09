@@ -1,0 +1,3 @@
+[submodule "Fuzzer/ISASim/riscv-isa-sim"]
+	path = Fuzzer/ISASim/riscv-isa-sim
+	url = https://github.com/Jackie425/riscv-isa-sim.git

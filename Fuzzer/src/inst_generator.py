@@ -1,5 +1,5 @@
-import os
 import random
+from dut_profile import profile
 
 from riscv_definitions import *
 from word import *
@@ -36,24 +36,30 @@ class rvInstGenerator():
 
         if 'RV64' in isa:
             isas = self.extend(isas)
+        self.profile = profile()
+        isas = self.profile.get('extensions', isas)
+        self.xlen = 32 if 'RV32' in isa else 64
         self.rv_isas = isas
-
         self.opcodes_map = {}
-        for isa in self.rv_isas:
-            self.opcodes_map.update(rv_opcodes[isa])
+        for extension in self.rv_isas:
+            self.opcodes_map.update(rv_opcodes[extension])
+        for opcode in self.profile.get('excluded_opcodes', []):
+            self.opcodes_map.pop(opcode, None)
 
-        self.opcodes = list(self.opcodes_map.keys())
+        self.opcodes = list(self.opcodes_map)
 
         self.prefix_num = 0
         self.main_num = 0
         self.suffix_num = 0
 
-        self.xNums = [ i for i in range(32) ]
+        # Preserve the stack pointer for trap handling.
+        excluded = set(self.profile.get('excluded_registers', [2]))
+        self.xNums = [i for i in range(32) if i not in excluded]
         self.fNums = [ i for i in range(32) ]
 
-        self.used_xNums = set([])
-        self.used_fNums = set([])
-        self.used_imms = set([])
+        self.used_xNums = set()
+        self.used_fNums = set()
+        self.used_imms = set()
 
 
     def extend(self, isas):
@@ -70,9 +76,9 @@ class rvInstGenerator():
         self.main_num = 0
         self.suffix_num = 0
 
-        self.used_xNums = set([])
-        self.used_fNums = set([])
-        self.used_imms = set([])
+        self.used_xNums = set()
+        self.used_fNums = set()
+        self.used_imms = set()
 
     def _get_xregs(self, region=(0, 31), no_zero=False, thres=0.2):
         if region == (0, 31) and len(self.used_xNums) > 0 and random.random() < thres:
@@ -131,16 +137,16 @@ class rvInstGenerator():
     def _get_symbol(self, tpe, my_label, max_label, part):
         if tpe == MEM_W:
             n = random.randint(0, 5) # TODO, num_mem_sections = 6
-            k = random.randint(0, 27)
+            k = random.randint(0, 14)
             symbol = 'd_' + str(n) + '_' + str(k)
         elif tpe == MEM_R:
             rand = random.random()
-            if rand < 0.2:
+            if rand < self.profile.get('load_code_probability', 0.2):
                 n = random.randint(0, max_label)
                 symbol = part + str(n)
             else:
                 n = random.randint(0, 5)
-                k = random.randint(0, 27)
+                k = random.randint(0, 14)
                 symbol = 'd_' + str(n) + '_' + str(k)
         else:
             if tpe in [ CF_J, CF_RET ]:
@@ -169,7 +175,10 @@ class rvInstGenerator():
             label_num = self.suffix_num
             self.suffix_num += 1
 
-        (syntax, xregs, fregs, imms, symbols) = self.opcodes_map.get(opcode)
+        instruction = self.opcodes_map.get(opcode)
+        if instruction is None:
+            raise ValueError('unsupported {} opcode selected for {}'.format(opcode, part))
+        syntax, xregs, fregs, imms, symbols = instruction
         xregs = list(xregs)
         fregs = list(fregs)
         imms = list(imms)
@@ -203,6 +212,12 @@ class rvInstGenerator():
                 opvals[xreg] = self._get_xregs()
             else:
                 opvals[xreg] = self._get_xregs(region, True)
+
+        if self.profile.get('distinct_memory_registers', False) and word.tpe in (MEM_R, MEM_W):
+            if 'xreg2' in opvals:
+                candidates = [i for i in self.xNums if i != 0 and
+                              'x' + str(i) != opvals['xreg1']]
+                opvals['xreg2'] = 'x' + str(random.choice(candidates))
 
         for freg in word.fregs:
             opvals[freg] = self._get_fregs()

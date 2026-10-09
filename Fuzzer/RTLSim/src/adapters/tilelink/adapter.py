@@ -93,12 +93,6 @@ class tlAdapter():
         self.probe_en = 1
         self.probe_addr = 0
 
-    def set_src_msgs(self, src_msgs, src, msgs):
-        assert src not in src_msgs.keys(), \
-            '{} already in src_msgs'.format(src)
-
-        src_msgs[src] = msgs
-
     def get_d_messages(self, message, memory, burst_len, addr_aligned, **kwargs):
         assert message in ['AccessAckData', 'GrantData'], \
             'get_d_messages only returns AccessAckData/GrantAckData'
