@@ -76,7 +76,7 @@ if parser.arg_map['toplevel'][0] in ('Ibex', 'picorv32_verif_top', 'cva6'):
     date = datetime.today().strftime('%Y%m%d')
     cov_log = os.path.join(out, 'cov_log_{}.txt'.format(date))
     if not os.path.isfile(cov_log):
-        save_file(cov_log, 'w', '{:<10}\t{:<10}\t{:<10}\n'.format('time', 'iter', 'coverage'))
+        save_file(cov_log, 'w', 'time\titer\tregcovsum\tstmtcovsum\tbranchcovsum\tpathcovsum\n')
     factory = TestFactory(Run)
     parser.register_option(factory)
     factory.add_option('cov_log', [cov_log])
@@ -108,8 +108,7 @@ else:
     date = datetime.today().strftime('%Y%m%d')
     cov_log = out + '/cov_log_{}.txt'.format(date)
     if (multicore or record) and not os.path.isfile(cov_log):
-        save_file(cov_log, 'w', '{:<10}\t{:<10}\t{:<10}\n'.
-                  format('time', 'iter', 'coverage'))
+        save_file(cov_log, 'w', 'time\titer\tregcovsum\tstmtcovsum\tbranchcovsum\tpathcovsum\n')
 
     start_time = time.monotonic()
 
@@ -148,7 +147,7 @@ else:
             if not os.path.isfile(out + '/coverage/cov_log_{}_{}.txt'.
                                   format(date, i)):
                 save_file(out + '/coverage/cov_log_{}_{}.txt'.format(date, i),
-                          'w', '{:<10}\t{:<10}\t{:<10}\n'.format('time', 'iter', 'coverage'))
+                          'w', 'time\titer\tregcovsum\tstmtcovsum\tbranchcovsum\tpathcovsum\n')
 
         num_tot_iter = parser.arg_map['num_iter'][0]
         num_iter = 5000

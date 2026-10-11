@@ -197,7 +197,17 @@ class IbexRTLHost:
         self.last_covsum[key] = max(self.last_covsum[key], int(signal.value))
         return self.last_covsum[key]
 
+    def code_coverage_sums(self):
+        # Keep each metric's high-water mark across inputs and DUT resets.
+        for kind in ('stmt', 'branch', 'path'):
+            signal = getattr(self.dut, 'pcov_code_{}_covsum'.format(kind))
+            self.last_covsum[kind] = max(self.last_covsum[kind], int(signal.value))
+        return tuple(self.last_covsum[kind] for kind in ('stmt', 'branch', 'path'))
+
     def _get_curve_covsum(self):
+        if all(hasattr(self.dut, 'pcov_code_{}_covsum'.format(kind))
+               for kind in ('stmt', 'branch', 'path')):
+            self.code_coverage_sums()
         self.last_covsum['reg'] = max(
             self.last_covsum['reg'], int(self.dut.pcov_reg_covsum.value))
         return self.last_covsum['reg']

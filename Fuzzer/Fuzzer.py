@@ -172,9 +172,11 @@ def Run(dut, toplevel,
             valid = ret == SUCCESS and match and not audit_isa_failed
             if record and valid:
                 metric_coverage = max(last_metric_coverage, coverage)
-                save_file(cov_log, 'a', '{:<10}\t{:<10}\t{:<10}\n'.format(
-                    time.monotonic() - start_time, start_iter + it,
-                    start_cov + metric_coverage))
+                values = (time.monotonic() - start_time, start_iter + it,
+                          start_cov + metric_coverage)
+                if benchmark:
+                    values += rtlHost.code_coverage_sums()
+                save_file(cov_log, 'a', '\t'.join(map(str, values)) + '\n')
                 last_metric_coverage = metric_coverage
 
             if valid and feedback != 'none' and feedback_coverage > last_coverage:

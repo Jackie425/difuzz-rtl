@@ -86,7 +86,17 @@ class Cva6RTLHost:
         self.last_covsum[self.feedback] = max(self.last_covsum[self.feedback], value)
         return self.last_covsum[self.feedback]
 
+    def code_coverage_sums(self):
+        # Keep each metric's high-water mark across inputs and DUT resets.
+        for kind in ('stmt', 'branch', 'path'):
+            signal = getattr(self.dut, 'pcov_code_{}_covsum'.format(kind))
+            self.last_covsum[kind] = max(self.last_covsum[kind], int(signal.value))
+        return tuple(self.last_covsum[kind] for kind in ('stmt', 'branch', 'path'))
+
     def _get_curve_covsum(self):
+        if all(hasattr(self.dut, 'pcov_code_{}_covsum'.format(kind))
+               for kind in ('stmt', 'branch', 'path')):
+            self.code_coverage_sums()
         # Measure the same register coverage for every feedback strategy.
         return self._cov('reg')
 
