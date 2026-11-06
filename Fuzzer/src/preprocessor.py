@@ -1,10 +1,10 @@
 import os
-import subprocess
 from dut_profile import profile
 
 from ISASim.host import isaInput
 from RTLSim.host import rtlInput
 from mutator import simInput, templates, V_U
+from src.toolchain import ToolchainError, run_tool
 
 class rvPreProcessor():
     def __init__(self, cc, elf2hex, template='Template', out_base ='.', proc_num=0,
@@ -37,11 +37,11 @@ class rvPreProcessor():
         self.elf2hex_args = [ elf2hex, '--bit-width', str(xlen), '--input' ]
 
     def get_symbols(self, elf_name, sym_name):
+        output = run_tool(['nm', elf_name], log=os.path.join(self.base, 'toolchain-errors.log'))
         with open(sym_name, 'w') as stream:
-            subprocess.run(['nm', elf_name], stdout=stream, check=True)
-        with open(sym_name) as stream:
-            return {fields[2]: int(fields[0], 16) for line in stream
-                    if len(fields := line.split()) == 3}
+            stream.write(output)
+        return {fields[2]: int(fields[0], 16) for line in output.splitlines()
+                if len(fields := line.split()) == 3}
 
     def write_isa_intr(self, isa_input, rtl_input, epc):
         fd = open(rtl_input.intrfile, 'r')
@@ -148,34 +148,29 @@ class rvPreProcessor():
 
         cc_args = self.cc_args + extra_args + [ asm_name, '-o', elf_name ]
 
-        while True:
-            cc_ret = subprocess.call(cc_args)
-            # if cc_ret == -9: cc process is killed by OS due to memory usage
-            if cc_ret != -9: break
+        log = os.path.join(self.base, 'toolchain-errors.log')
+        for stale in (elf_name, hex_name, sym_name):
+            if os.path.exists(stale):
+                os.unlink(stale)
+        run_tool(cc_args, log=log)
+        elf2hex_args = self.elf2hex_args + [elf_name, '--output', hex_name]
+        run_tool(elf2hex_args, log=log)
+        if not os.path.isfile(hex_name) or not os.path.getsize(hex_name):
+            raise ToolchainError('converter produced no firmware image: {}'.format(hex_name))
+        symbols = self.get_symbols(elf_name, sym_name)
+        if self.xlen == 32:
+            symbols['_signature_format'] = 'rv32'
 
-        if cc_ret == 0:
-            elf2hex_args = self.elf2hex_args + [elf_name, '--output', hex_name]
-            if subprocess.call(elf2hex_args) != 0:
-                return None, None, None
-            symbols = self.get_symbols(elf_name, sym_name)
-            if self.xlen == 32:
-                symbols['_signature_format'] = 'rv32'
+        if intr:
+            fuzz_main = symbols['_fuzz_main']
+            fd = open(rtl_intr_name, 'w')
+            for i, INT in enumerate(ints):
+                if INT:
+                    fd.write('{:016x}:{:04b}\n'.format(fuzz_main + 4 * i, INT))
+            fd.close()
 
-            if intr:
-                fuzz_main = symbols['_fuzz_main']
-                fd = open(rtl_intr_name, 'w')
-                for i, INT in enumerate(ints):
-                    if INT:
-                        fd.write('{:016x}:{:04b}\n'.format(fuzz_main + 4 * i, INT))
-                fd.close()
+        max_cycles = self.max_cycles or (6000 if version != V_U else 200000)
 
-            max_cycles = self.max_cycles or (6000 if version != V_U else 200000)
-
-            isa_input = isaInput(elf_name, isa_intr_name)
-            rtl_input = rtlInput(hex_name, rtl_intr_name, data, symbols, max_cycles)
-        else:
-            isa_input = None
-            rtl_input = None
-            symbols = None
-
+        isa_input = isaInput(elf_name, isa_intr_name)
+        rtl_input = rtlInput(hex_name, rtl_intr_name, data, symbols, max_cycles)
         return (isa_input, rtl_input, symbols)

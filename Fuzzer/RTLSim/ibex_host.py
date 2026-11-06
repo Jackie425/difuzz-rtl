@@ -213,6 +213,9 @@ class IbexRTLHost:
         return self.last_covsum['reg']
 
     def _get_feedback_covsum(self):
+        if self.feedback == 'hybrid':
+            self._get_curve_covsum()
+            return sum(self.last_covsum[k] for k in ('reg', 'stmt', 'branch', 'path'))
         if self.feedback == 'none':
             return 0
         if self.feedback in ('branch', 'path', 'stmt', 'toggle'):

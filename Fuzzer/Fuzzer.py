@@ -7,6 +7,7 @@ from RTLSim.host import ILL_MEM, SUCCESS, TIME_OUT, ASSERTION_FAIL
 
 from src.utils import debug_print, run_isa_test, save_err, save_file, save_mismatch, setup
 from src.multicore_manager import proc_state
+from src.toolchain import ToolchainError
 
 
 @coroutine
@@ -74,131 +75,128 @@ def Run(dut, toplevel,
             for inst, INT in zip(sim_input.get_insts(), sim_input.ints + [0]):
                 print('{:<50}{:04b}'.format(inst, INT))
 
-        (isa_input, rtl_input, symbols) = preprocessor.process(sim_input, data, assert_intr)
-
-        if isa_input and rtl_input:
-            if benchmark:
-                isaHost.set_start_pc(symbols[os.environ.get('SPIKE_START_SYMBOL', '_start')])
-            ret = run_isa_test(isaHost, isa_input, stop, out, proc_num)
-            if audit:
-                print("[INPUT_AUDIT] ISA result={}".format(ret), flush=True)
-            if ret == proc_state.ERR_ISA_TIMEOUT:
-                input_result(test_id, 'isa_timeout')
-                if record:
-                    save_mismatch(out, proc_num, out + '/isa_timeout', sim_input, data, test_id)
-                continue
-            elif ret == proc_state.ERR_ISA_ASSERT and not audit:
-                # Retain rejected inputs without stopping the timed experiment.
-                if record:
-                    save_mismatch(out, proc_num, out + '/illegal', sim_input,
-                                  data, test_id if benchmark else iNum)
-                iNum += 1
-                input_result(test_id, 'isa_error')
-                continue
-
-            audit_isa_failed = audit and ret != proc_state.NORMAL
-            try:
-                (ret, coverage) = yield rtlHost.run_test(rtl_input, assert_intr)
-            except Exception as error:
-                stop[0] = proc_state.ERR_RTL_SIM
-                raise RuntimeError('RTL simulation failed: {}'.format(error)) from error
-
-            if audit:
-                print("[INPUT_AUDIT] RTL result={}".format(ret), flush=True)
-
-            feedback_coverage = (rtlHost.feedback_coverage()
-                                 if hasattr(rtlHost, 'feedback_coverage')
-                                 else coverage)
-
-            if assert_intr and ret == SUCCESS:
-                (intr_prv, epc) = checker.check_intr(symbols)
-                if epc != 0:
-                    preprocessor.write_isa_intr(isa_input, rtl_input, epc)
-                    ret = run_isa_test(isaHost, isa_input, stop, out, proc_num, True)
-                    if ret == proc_state.ERR_ISA_TIMEOUT: continue
-                    elif ret == proc_state.ERR_ISA_ASSERT:
-                        if record:
-                            save_mismatch(out, proc_num, out + '/illegal', sim_input,
-                                  data, test_id if benchmark else iNum)
-                        iNum += 1
-                        continue
-                else: continue
-
-            cause = '-'
-            match = False
-            if ret == SUCCESS:
-                match = audit_isa_failed or checker.check(symbols)
-            elif ret == ILL_MEM:
-                match = True
-                debug_print('[DifuzzRTL] Memory access outside DRAM -- {}'. \
-                            format(iNum), debug, True)
-                if record:
-                    save_mismatch(out, proc_num, out + '/illegal',
-                                  sim_input, data,
-                                  test_id if benchmark else iNum)
-                iNum += 1
-
-            if not match or ret not in [SUCCESS, ILL_MEM]:
-                if multicore:
-                    mNum = manager.read_num('mNum')
-                    manager.write_num('mNum', mNum + 1)
-
-                if record:
-                    signatures = None
-                    if benchmark:
-                        signatures = {}
-                        if os.path.isfile(checker.isa_sigfile):
-                            signatures['isa'] = checker.isa_sigfile
-                        if os.path.isfile(rtlHost.signature_file):
-                            signatures['rtl'] = rtlHost.signature_file
-                    save_mismatch(out, proc_num, out + '/mismatch',
-                                  sim_input, data,
-                                  test_id if benchmark else mNum,
-                                  signatures)
-
-                mNum += 1
-                if ret == TIME_OUT: cause = 'Timeout'
-                elif ret == ASSERTION_FAIL: cause = 'Assertion fail'
-                else: cause = 'Mismatch'
-
-                debug_print('[DifuzzRTL] Bug -- {} [{}]'. \
-                            format(mNum, cause), debug, not match or (ret != SUCCESS))
-
-            input_result(test_id, 'isa_error' if audit_isa_failed else
-                         'valid' if ret == SUCCESS and match else
-                         'illegal_memory' if ret == ILL_MEM else
-                         'rtl_timeout' if ret == TIME_OUT else 'mismatch')
-
-            valid = ret == SUCCESS and match and not audit_isa_failed
-            if record and valid:
-                metric_coverage = max(last_metric_coverage, coverage)
-                values = (time.monotonic() - start_time, start_iter + it,
-                          start_cov + metric_coverage)
-                if benchmark:
-                    values += rtlHost.code_coverage_sums()
-                save_file(cov_log, 'a', '\t'.join(map(str, values)) + '\n')
-                last_metric_coverage = metric_coverage
-
-            if valid and feedback != 'none' and feedback_coverage > last_coverage:
-                if multicore:
-                    cNum = manager.read_num('cNum')
-                    manager.write_num('cNum', cNum + 1)
-
-                if record:
-                    corpus_id = test_id if benchmark else cNum
-                    sim_input.save(out + '/corpus/id_{}.si'.format(corpus_id))
-
-                cNum += 1
-                mutator.add_corpus(sim_input)
-                last_coverage = feedback_coverage
-
-            mutator.update_phase(it)
-
-        else:
+        try:
+            (isa_input, rtl_input, symbols) = preprocessor.process(sim_input, data, assert_intr)
+        except (ToolchainError, OSError) as error:
             input_result(test_id, 'compile_error')
-            stop[0] = proc_state.ERR_COMPILE
-            # Compile failed
-            break
+            raise RuntimeError('input {} compilation failed: {}'.format(test_id, error)) from error
+
+        if benchmark:
+            isaHost.set_start_pc(symbols[os.environ.get('SPIKE_START_SYMBOL', '_start')])
+        ret = run_isa_test(isaHost, isa_input, stop, out, proc_num)
+        if audit:
+            print("[INPUT_AUDIT] ISA result={}".format(ret), flush=True)
+        if ret == proc_state.ERR_ISA_TIMEOUT:
+            input_result(test_id, 'isa_timeout')
+            if record:
+                save_mismatch(out, proc_num, out + '/isa_timeout', sim_input, data, test_id)
+            continue
+        elif ret == proc_state.ERR_ISA_ASSERT and not audit:
+            # Retain rejected inputs without stopping the timed experiment.
+            if record:
+                save_mismatch(out, proc_num, out + '/illegal', sim_input,
+                              data, test_id if benchmark else iNum)
+            iNum += 1
+            input_result(test_id, 'isa_error')
+            continue
+
+        audit_isa_failed = audit and ret != proc_state.NORMAL
+        try:
+            (ret, coverage) = yield rtlHost.run_test(rtl_input, assert_intr)
+        except Exception as error:
+            stop[0] = proc_state.ERR_RTL_SIM
+            raise RuntimeError('RTL simulation failed: {}'.format(error)) from error
+
+        if audit:
+            print("[INPUT_AUDIT] RTL result={}".format(ret), flush=True)
+
+        feedback_coverage = (rtlHost.feedback_coverage()
+                             if hasattr(rtlHost, 'feedback_coverage')
+                             else coverage)
+
+        if assert_intr and ret == SUCCESS:
+            (intr_prv, epc) = checker.check_intr(symbols)
+            if epc != 0:
+                preprocessor.write_isa_intr(isa_input, rtl_input, epc)
+                ret = run_isa_test(isaHost, isa_input, stop, out, proc_num, True)
+                if ret == proc_state.ERR_ISA_TIMEOUT: continue
+                elif ret == proc_state.ERR_ISA_ASSERT:
+                    if record:
+                        save_mismatch(out, proc_num, out + '/illegal', sim_input,
+                              data, test_id if benchmark else iNum)
+                    iNum += 1
+                    continue
+            else: continue
+
+        cause = '-'
+        match = False
+        if ret == SUCCESS:
+            match = audit_isa_failed or checker.check(symbols)
+        elif ret == ILL_MEM:
+            match = True
+            debug_print('[DifuzzRTL] Memory access outside DRAM -- {}'. \
+                        format(iNum), debug, True)
+            if record:
+                save_mismatch(out, proc_num, out + '/illegal',
+                              sim_input, data,
+                              test_id if benchmark else iNum)
+            iNum += 1
+
+        if not match or ret not in [SUCCESS, ILL_MEM]:
+            if multicore:
+                mNum = manager.read_num('mNum')
+                manager.write_num('mNum', mNum + 1)
+
+            if record:
+                signatures = None
+                if benchmark:
+                    signatures = {}
+                    if os.path.isfile(checker.isa_sigfile):
+                        signatures['isa'] = checker.isa_sigfile
+                    if os.path.isfile(rtlHost.signature_file):
+                        signatures['rtl'] = rtlHost.signature_file
+                save_mismatch(out, proc_num, out + '/mismatch',
+                              sim_input, data,
+                              test_id if benchmark else mNum,
+                              signatures)
+
+            mNum += 1
+            if ret == TIME_OUT: cause = 'Timeout'
+            elif ret == ASSERTION_FAIL: cause = 'Assertion fail'
+            else: cause = 'Mismatch'
+
+            debug_print('[DifuzzRTL] Bug -- {} [{}]'. \
+                        format(mNum, cause), debug, not match or (ret != SUCCESS))
+
+        input_result(test_id, 'isa_error' if audit_isa_failed else
+                     'valid' if ret == SUCCESS and match else
+                     'illegal_memory' if ret == ILL_MEM else
+                     'rtl_timeout' if ret == TIME_OUT else 'mismatch')
+
+        valid = ret == SUCCESS and match and not audit_isa_failed
+        if record and valid:
+            metric_coverage = max(last_metric_coverage, coverage)
+            values = (time.monotonic() - start_time, start_iter + it,
+                      start_cov + metric_coverage)
+            if benchmark:
+                values += rtlHost.code_coverage_sums()
+            save_file(cov_log, 'a', '\t'.join(map(str, values)) + '\n')
+            last_metric_coverage = metric_coverage
+
+        if valid and feedback != 'none' and feedback_coverage > last_coverage:
+            if multicore:
+                cNum = manager.read_num('cNum')
+                manager.write_num('cNum', cNum + 1)
+
+            if record:
+                corpus_id = test_id if benchmark else cNum
+                sim_input.save(out + '/corpus/id_{}.si'.format(corpus_id))
+
+            cNum += 1
+            mutator.add_corpus(sim_input)
+            last_coverage = feedback_coverage
+
+        mutator.update_phase(it)
 
     if multicore:
         save_err(out, proc_num, manager, stop[0])

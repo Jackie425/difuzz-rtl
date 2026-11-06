@@ -79,6 +79,10 @@ class PicoRV32RTLHost:
         return int(signal.value) if signal is not None else 0
 
     def _get_feedback_covsum(self):
+        if self.feedback == 'hybrid':
+            self.last_covsum['reg'] = max(
+                self.last_covsum['reg'], self._get_curve_covsum())
+            return sum(self.last_covsum[k] for k in ('reg', 'stmt', 'branch', 'path'))
         value = self._cov(self.feedback)
         self.last_covsum[self.feedback] = max(self.last_covsum[self.feedback], value)
         return self.last_covsum[self.feedback]
